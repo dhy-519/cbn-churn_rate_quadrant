@@ -11,9 +11,48 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- SIDEBAR: NAVIGASI & DOKUMENTASI TEKNIS ---
+# --- SIDEBAR: NAVIGASI & PENGATURAN TEMA ---
 st.sidebar.title("Navigasi")
-page = st.sidebar.radio("Pilih Halaman:", ["Aplikasi Utama", "Technical Documentation"])
+page = st.sidebar.radio(
+    "Pilih Halaman:", ["Aplikasi Utama", "Technical Documentation"]
+)
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("⚙️ Pengaturan Tampilan")
+theme_mode = st.sidebar.radio("Mode Tema:", ["Light Mode", "Dark Mode"], index=0)
+
+# Menerapkan style CSS dinamis berdasarkan pilihan tema
+if theme_mode == "Dark Mode":
+  st.markdown(
+      """
+        <style>
+        .stApp {
+            background-color: #0e1117;
+            color: #ffffff;
+        }
+        </style>
+        """,
+      unsafe_allow_html=True,
+  )
+  plotly_template = "plotly_dark"
+  grid_color = "rgba(255, 255, 255, 0.1)"
+  # Warna background kuadran untuk tema gelap (sedikit lebih redup agar kontras)
+  bg_opacity = 0.2
+else:
+  st.markdown(
+      """
+        <style>
+        .stApp {
+            background-color: #ffffff;
+            color: #31333F;
+        }
+        </style>
+        """,
+      unsafe_allow_html=True,
+  )
+  plotly_template = "plotly_white"
+  grid_color = "lightgray"
+  bg_opacity = 0.15
 
 if page == "Technical Documentation":
   st.title("📖 Technical Documentation")
@@ -44,7 +83,7 @@ if page == "Technical Documentation":
 st.title("📊 Regional Churn Quadrant Analyzer")
 st.write(
     "Unggah data rekapitulasi wilayah untuk membagi kuadran secara otomatis"
-    " berdasarkan Churn Rate Nasional dan Median Churn Sub dengan latar belakang berwarna."
+    " berdasarkan Churn Rate Nasional dan Median Churn Sub."
 )
 
 # 1. Input Nama File Output di Main Area
@@ -158,11 +197,11 @@ if uploaded_file is not None:
       x_buffer = (x_max - x_min) * 0.05 if x_max > x_min else 1.0
       y_buffer = y_max * 0.05
 
-      # Warna latar kuadran (transparan dengan alpha)
-      color_q1_bg = "rgba(255, 77, 77, 0.15)"   # Merah transparan
-      color_q2_bg = "rgba(255, 148, 77, 0.15)"  # Oranye transparan
-      color_q3_bg = "rgba(255, 219, 77, 0.15)"  # Kuning transparan
-      color_q4_bg = "rgba(77, 171, 77, 0.15)"   # Hijau transparan
+      # Warna latar kuadran dinamis
+      color_q1_bg = f"rgba(255, 77, 77, {bg_opacity})"   # Merah transparan
+      color_q2_bg = f"rgba(255, 148, 77, {bg_opacity})"  # Oranye transparan
+      color_q3_bg = f"rgba(255, 219, 77, {bg_opacity})"  # Kuning transparan
+      color_q4_bg = f"rgba(77, 171, 77, {bg_opacity})"   # Hijau transparan
 
       # Visualisasi Scatter Plot dengan Plotly
       st.subheader("🗺️ Peta Sebaran Kuadran Wilayah")
@@ -257,9 +296,9 @@ if uploaded_file is not None:
       )
       fig.update_layout(
           height=600,
-          template="plotly_white",
-          xaxis=dict(showgrid=True, gridcolor="lightgray"),
-          yaxis=dict(showgrid=True, gridcolor="lightgray"),
+          template=plotly_template,  # Mengikuti tema Light/Dark
+          xaxis=dict(showgrid=True, gridcolor=grid_color),
+          yaxis=dict(showgrid=True, gridcolor=grid_color),
       )
       st.plotly_chart(fig, use_container_width=True)
 
