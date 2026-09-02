@@ -19,7 +19,6 @@ page = st.sidebar.radio(
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Pengaturan Tampilan")
-# Default index diset ke 1 (Dark Mode)
 theme_mode = st.sidebar.radio(
     "Mode Tema:", ["Light Mode", "Dark Mode"], index=1
 )
@@ -366,7 +365,7 @@ try:
     df_trend = get_historical_pivot(table_mode)
 
 
-    # Fungsi styling warna background untuk tabel kuadran
+    # Fungsi styling warna background untuk tabel kuadran (menggunakan .map)
     def color_quadrant_cells(val):
       if table_mode == "Posisi Kuadran":
         if "Q1" in str(val):
@@ -382,8 +381,7 @@ try:
 
     if table_mode == "Posisi Kuadran":
       st.dataframe(
-          df_trend.style.applymap(color_quadrant_cells),
-          use_container_width=True,
+          df_trend.style.map(color_quadrant_cells), use_container_width=True
       )
     else:
       st.dataframe(df_trend, use_container_width=True)
