@@ -94,7 +94,7 @@ try:
   df_all = load_data_from_github(GITHUB_CSV_URL)
   df_all.columns = df_all.columns.str.strip()
 
-  # Deteksi kolom periode (misal: 'Period', 'Month', atau 'Periode')
+  # Deteksi kolom periode
   period_col = None
   for col in ["Period", "Month", "Periode"]:
     if col in df_all.columns:
@@ -102,8 +102,16 @@ try:
       break
 
   if period_col:
-    periods = sorted(df_all[period_col].unique())
-    # Default ke periode terbaru (index terakhir, yaitu Aug 2026)
+    # Urutkan periode secara kronologis (ascending: Jul lalu Aug)
+    try:
+      periods = sorted(
+          df_all[period_col].unique(),
+          key=lambda x: pd.to_datetime(x, format="%b-%y"),
+      )
+    except:
+      periods = sorted(df_all[period_col].unique())
+
+    # Default ke periode terbaru (elemen terakhir dalam urutan kronologis, misal Aug-26)
     selected_period = st.selectbox(
         "Pilih Periode Analisis:", periods, index=len(periods) - 1
     )
@@ -314,7 +322,6 @@ try:
       processed_list = []
       for p in periods:
         df_p = df_all[df_all[period_col] == p].copy()
-        # Bersihkan total jika ada
         df_p = df_p[
             ~df_p["Region"]
             .astype(str)
@@ -348,6 +355,10 @@ try:
 
       df_proc = pd.DataFrame(processed_list)
       df_pivot = df_proc.pivot(index="Region", columns="Period", values="Value")
+
+      # Pastikan urutan kolom (periode) dari kiri ke kanan berurutan secara ascending (Jul -> Aug)
+      existing_periods = [p for p in periods if p in df_pivot.columns]
+      df_pivot = df_pivot[existing_periods]
       return df_pivot
 
 
