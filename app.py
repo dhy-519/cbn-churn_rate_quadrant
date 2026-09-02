@@ -19,7 +19,10 @@ page = st.sidebar.radio(
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Pengaturan Tampilan")
-theme_mode = st.sidebar.radio("Mode Tema:", ["Light Mode", "Dark Mode"], index=0)
+# Default index diset ke 1 (Dark Mode)
+theme_mode = st.sidebar.radio(
+    "Mode Tema:", ["Light Mode", "Dark Mode"], index=1
+)
 
 # Pengaturan styling dan warna berdasarkan pilihan tema
 if theme_mode == "Dark Mode":
@@ -67,10 +70,10 @@ if page == "Technical Documentation":
     * **Titik Pembagi Y (Median Churn Sub)**: Dihitung dari nilai tengah data wilayah pada periode yang sama.
     
     ### 2. Klasifikasi 4 Kuadran
-    * **Q1 - High Impact**: Churn Rate > Nasional DAN Churn Sub > Median.
-    * **Q2 - High Rate**: Churn Rate > Nasional DAN Churn Sub $\le$ Median.
-    * **Q3 - High Volume**: Churn Rate $\le$ Nasional DAN Churn Sub > Median.
-    * **Q4 - Low**: Churn Rate $\le$ Nasional DAN Churn Sub $\le$ Median.
+    * **Q1 - High Impact**: Churn Rate > Nasional DAN Churn Sub > Median (Merah).
+    * **Q2 - High Rate**: Churn Rate > Nasional DAN Churn Sub $\le$ Median (Oranye).
+    * **Q3 - High Volume**: Churn Rate $\le$ Nasional DAN Churn Sub > Median (Kuning).
+    * **Q4 - Low**: Churn Rate $\le$ Nasional DAN Churn Sub $\le$ Median (Hijau).
     """)
   st.stop()
 
@@ -102,7 +105,6 @@ try:
       break
 
   if period_col:
-    # Urutkan periode secara kronologis (ascending: Jul lalu Aug)
     try:
       periods = sorted(
           df_all[period_col].unique(),
@@ -111,7 +113,7 @@ try:
     except:
       periods = sorted(df_all[period_col].unique())
 
-    # Default ke periode terbaru (elemen terakhir dalam urutan kronologis, misal Aug-26)
+    # Default ke periode terbaru (elemen terakhir, misal Aug-26)
     selected_period = st.selectbox(
         "Pilih Periode Analisis:", periods, index=len(periods) - 1
     )
@@ -120,7 +122,7 @@ try:
     selected_period = "Terbaru"
     df_current = df_all.copy()
 
-  # Bersihkan baris Grand Total jika terbawa di dalam file CSV
+  # Bersihkan baris Grand Total jika terbawa
   total_row_filter = (
       df_current["Region"]
       .astype(str)
@@ -356,14 +358,35 @@ try:
       df_proc = pd.DataFrame(processed_list)
       df_pivot = df_proc.pivot(index="Region", columns="Period", values="Value")
 
-      # Pastikan urutan kolom (periode) dari kiri ke kanan berurutan secara ascending (Jul -> Aug)
       existing_periods = [p for p in periods if p in df_pivot.columns]
       df_pivot = df_pivot[existing_periods]
       return df_pivot
 
 
     df_trend = get_historical_pivot(table_mode)
-    st.dataframe(df_trend, use_container_width=True)
+
+
+    # Fungsi styling warna background untuk tabel kuadran
+    def color_quadrant_cells(val):
+      if table_mode == "Posisi Kuadran":
+        if "Q1" in str(val):
+          return "background-color: rgba(255, 77, 77, 0.4); color: white;"
+        elif "Q2" in str(val):
+          return "background-color: rgba(255, 148, 77, 0.4); color: white;"
+        elif "Q3" in str(val):
+          return "background-color: rgba(255, 219, 77, 0.4); color: black;"
+        elif "Q4" in str(val):
+          return "background-color: rgba(77, 171, 77, 0.4); color: white;"
+      return ""
+
+
+    if table_mode == "Posisi Kuadran":
+      st.dataframe(
+          df_trend.style.applymap(color_quadrant_cells),
+          use_container_width=True,
+      )
+    else:
+      st.dataframe(df_trend, use_container_width=True)
 
   # Fitur Download ke Excel
   output = io.BytesIO()
