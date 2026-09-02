@@ -21,7 +21,7 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Pengaturan Tampilan")
 theme_mode = st.sidebar.radio("Mode Tema:", ["Light Mode", "Dark Mode"], index=0)
 
-# Menerapkan style CSS dinamis berdasarkan pilihan tema
+# Pengaturan styling dan warna berdasarkan pilihan tema
 if theme_mode == "Dark Mode":
   st.markdown(
       """
@@ -36,8 +36,9 @@ if theme_mode == "Dark Mode":
   )
   plotly_template = "plotly_dark"
   grid_color = "rgba(255, 255, 255, 0.1)"
-  # Warna background kuadran untuk tema gelap (sedikit lebih redup agar kontras)
-  bg_opacity = 0.2
+  line_color = "#4E83EE"
+  text_color = "#ffffff"
+  bg_opacity = 0.2  # Agak gelap untuk tema dark
 else:
   st.markdown(
       """
@@ -52,7 +53,9 @@ else:
   )
   plotly_template = "plotly_white"
   grid_color = "lightgray"
-  bg_opacity = 0.15
+  line_color = "#1f77b4"
+  text_color = "#333333"
+  bg_opacity = 0.25  # Pastel cerah untuk tema light
 
 if page == "Technical Documentation":
   st.title("📖 Technical Documentation")
@@ -77,7 +80,7 @@ if page == "Technical Documentation":
     * **Q3 - High Volume**: Churn Rate $\le$ Nasional DAN Churn Sub > Median.
     * **Q4 - Low**: Churn Rate $\le$ Nasional DAN Churn Sub $\le$ Median.
     """)
-  st.stop()  # Menghentikan eksekusi agar halaman utama tidak ikut tampil
+  st.stop()
 
 # --- HALAMAN UTAMA ---
 st.title("📊 Regional Churn Quadrant Analyzer")
@@ -197,11 +200,17 @@ if uploaded_file is not None:
       x_buffer = (x_max - x_min) * 0.05 if x_max > x_min else 1.0
       y_buffer = y_max * 0.05
 
-      # Warna latar kuadran dinamis
-      color_q1_bg = f"rgba(255, 77, 77, {bg_opacity})"   # Merah transparan
-      color_q2_bg = f"rgba(255, 148, 77, {bg_opacity})"  # Oranye transparan
-      color_q3_bg = f"rgba(255, 219, 77, {bg_opacity})"  # Kuning transparan
-      color_q4_bg = f"rgba(77, 171, 77, {bg_opacity})"   # Hijau transparan
+      # Warna latar kuadran dinamis berdasarkan mode tema
+      if theme_mode == "Light Mode":
+        color_q1_bg = "rgba(255, 99, 132, 0.12)"  # Merah muda pastel
+        color_q2_bg = "rgba(255, 159, 64, 0.12)"  # Oranye pastel
+        color_q3_bg = "rgba(255, 205, 86, 0.12)"  # Kuning pastel
+        color_q4_bg = "rgba(75, 192, 192, 0.12)"  # Hijau pastel
+      else:
+        color_q1_bg = "rgba(255, 77, 77, 0.2)"
+        color_q2_bg = "rgba(255, 148, 77, 0.2)"
+        color_q3_bg = "rgba(255, 219, 77, 0.2)"
+        color_q4_bg = "rgba(77, 171, 77, 0.2)"
 
       # Visualisasi Scatter Plot dengan Plotly
       st.subheader("🗺️ Peta Sebaran Kuadran Wilayah")
@@ -275,20 +284,22 @@ if uploaded_file is not None:
           line_width=0,
       )
 
-      # Tambahkan garis pembagi median (Y) dan nasional (X)
+      # Tambahkan garis pembagi median (Y) dan nasional (X) dengan warna teks dinamis
       fig.add_hline(
           y=median_churn_sub,
           line_dash="dash",
-          line_color="blue",
+          line_color=line_color,
           annotation_text=f"Median Churn Sub: {median_churn_sub:,.0f}",
           annotation_position="bottom right",
+          annotation_font=dict(color=text_color),
       )
       fig.add_vline(
           x=national_churn_rate,
           line_dash="dash",
-          line_color="blue",
+          line_color=line_color,
           annotation_text=f"Churn Rate Nasional: {national_churn_rate:.2f}%",
           annotation_position="top left",
+          annotation_font=dict(color=text_color),
       )
 
       fig.update_traces(
@@ -296,7 +307,8 @@ if uploaded_file is not None:
       )
       fig.update_layout(
           height=600,
-          template=plotly_template,  # Mengikuti tema Light/Dark
+          template=plotly_template,
+          font=dict(color=text_color),
           xaxis=dict(showgrid=True, gridcolor=grid_color),
           yaxis=dict(showgrid=True, gridcolor=grid_color),
       )
