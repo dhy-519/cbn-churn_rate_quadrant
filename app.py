@@ -104,15 +104,16 @@ try:
       break
 
   if period_col:
+    # Urutkan periode secara kronologis dengan aman (mendukung berbagai format tanggal)
     try:
       periods = sorted(
           df_all[period_col].unique(),
-          key=lambda x: pd.to_datetime(x, format="%b-%y"),
+          key=lambda x: pd.to_datetime(x, format="mixed", errors="coerce"),
       )
     except:
       periods = sorted(df_all[period_col].unique())
 
-    # Default ke periode terbaru (elemen terakhir, misal Aug-26)
+    # Default ke periode terbaru (elemen terakhir dalam urutan kronologis)
     selected_period = st.selectbox(
         "Pilih Periode Analisis:", periods, index=len(periods) - 1
     )
@@ -365,7 +366,6 @@ try:
     df_trend = get_historical_pivot(table_mode)
 
 
-    # Fungsi styling warna background untuk tabel kuadran (menggunakan .map)
     def color_quadrant_cells(val):
       if table_mode == "Posisi Kuadran":
         if "Q1" in str(val):
