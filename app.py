@@ -1,6 +1,5 @@
 import datetime
 import io
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -45,7 +44,7 @@ if page == "Technical Documentation":
 st.title("📊 Regional Churn Quadrant Analyzer")
 st.write(
     "Unggah data rekapitulasi wilayah untuk membagi kuadran secara otomatis"
-    " berdasarkan Churn Rate Nasional dan Median Churn Sub."
+    " berdasarkan Churn Rate Nasional dan Median Churn Sub dengan latar belakang berwarna."
 )
 
 # 1. Input Nama File Output di Main Area
@@ -56,7 +55,7 @@ output_filename = st.text_input(
     "Nama File Output (Hasil Export):", value=default_filename
 )
 
-# 2. Tombol Upload File di Main Area (Bukan di Sidebar)
+# 2. Tombol Upload File di Main Area
 uploaded_file = st.file_uploader(
     "Upload file Excel (.xlsx) atau CSV (.csv)", type=["xlsx", "csv"]
 )
@@ -83,7 +82,6 @@ if uploaded_file is not None:
       )
     else:
       # Memisahkan baris Grand Total jika ada, atau menghitungnya secara otomatis
-      # Mencari baris yang mengandung kata 'Grand Total' atau 'Total' di kolom Region
       total_row_filter = (
           df["Region"]
           .astype(str)
@@ -94,10 +92,8 @@ if uploaded_file is not None:
         df_total = df[total_row_filter].iloc[0]
         total_churn_sub = float(df_total["Churn Sub"])
         total_eop = float(df_total["EOP"])
-        # Ambil data region saja (buang baris total untuk plotting)
         df_regions = df[~total_row_filter].copy()
       else:
-        # Jika tidak ada baris grand total eksplisit, hitung dari akumulasi data region
         df_regions = df.copy()
         total_churn_sub = df_regions["Churn Sub"].sum()
         total_eop = df_regions["EOP"].sum()
@@ -153,6 +149,21 @@ if uploaded_file is not None:
         )
       st.markdown("---")
 
+      # Tentukan range sumbu agar area warna menutupi seluruh plot
+      x_min = df_regions["Churn Rate (%)"].min()
+      x_max = df_regions["Churn Rate (%)"].max()
+      y_min = 0
+      y_max = df_regions["Churn Sub"].max()
+
+      x_buffer = (x_max - x_min) * 0.05 if x_max > x_min else 1.0
+      y_buffer = y_max * 0.05
+
+      # Warna latar kuadran (transparan dengan alpha)
+      color_q1_bg = "rgba(255, 77, 77, 0.15)"   # Merah transparan
+      color_q2_bg = "rgba(255, 148, 77, 0.15)"  # Oranye transparan
+      color_q3_bg = "rgba(255, 219, 77, 0.15)"  # Kuning transparan
+      color_q4_bg = "rgba(77, 171, 77, 0.15)"   # Hijau transparan
+
       # Visualisasi Scatter Plot dengan Plotly
       st.subheader("🗺️ Peta Sebaran Kuadran Wilayah")
       fig = px.scatter(
@@ -169,6 +180,60 @@ if uploaded_file is not None:
           },
           hover_data=["EOP"],
           title="Distribusi Kuadran Churn Berdasarkan Wilayah",
+      )
+
+      # --- TAMBAHKAN SHAPES LATAR BELAKANG KUADRAN ---
+      # Q3 - High Volume (Kiri Atas)
+      fig.add_shape(
+          type="rect",
+          xref="x",
+          yref="y",
+          x0=x_min - x_buffer,
+          y0=median_churn_sub,
+          x1=national_churn_rate,
+          y1=y_max + y_buffer,
+          fillcolor=color_q3_bg,
+          layer="below",
+          line_width=0,
+      )
+      # Q1 - High Impact (Kanan Atas)
+      fig.add_shape(
+          type="rect",
+          xref="x",
+          yref="y",
+          x0=national_churn_rate,
+          y0=median_churn_sub,
+          x1=x_max + x_buffer,
+          y1=y_max + y_buffer,
+          fillcolor=color_q1_bg,
+          layer="below",
+          line_width=0,
+      )
+      # Q4 - Low (Kiri Bawah)
+      fig.add_shape(
+          type="rect",
+          xref="x",
+          yref="y",
+          x0=x_min - x_buffer,
+          y0=y_min,
+          x1=national_churn_rate,
+          y1=median_churn_sub,
+          fillcolor=color_q4_bg,
+          layer="below",
+          line_width=0,
+      )
+      # Q2 - High Rate (Kanan Bawah)
+      fig.add_shape(
+          type="rect",
+          xref="x",
+          yref="y",
+          x0=national_churn_rate,
+          y0=y_min,
+          x1=x_max + x_buffer,
+          y1=median_churn_sub,
+          fillcolor=color_q2_bg,
+          layer="below",
+          line_width=0,
       )
 
       # Tambahkan garis pembagi median (Y) dan nasional (X)
@@ -188,9 +253,14 @@ if uploaded_file is not None:
       )
 
       fig.update_traces(
-          textposition="top center", marker=dict(size=12, opacity=0.8)
+          textposition="top center", marker=dict(size=12, opacity=0.9)
       )
-      fig.update_layout(height=600, template="plotly_white")
+      fig.update_layout(
+          height=600,
+          template="plotly_white",
+          xaxis=dict(showgrid=True, gridcolor="lightgray"),
+          yaxis=dict(showgrid=True, gridcolor="lightgray"),
+      )
       st.plotly_chart(fig, use_container_width=True)
 
       # Tampilkan Tabel Hasil Pemetaan
