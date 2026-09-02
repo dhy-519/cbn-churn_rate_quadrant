@@ -62,16 +62,12 @@ if page == "Technical Documentation":
   st.markdown("""
     Dokumentasi ini menjelaskan logika dan cara kerja dari aplikasi **Regional Churn Quadrant Analyzer**.
     
-    ### 1. Sumber Data Otomatis
-    Aplikasi terhubung langsung dengan file data di repository GitHub (`Churn Quadrant.csv`).
+    ### 1. Perhitungan Spesifik Periode
+    * **Titik Pembagi X (Churn Rate Nasional)**: Dihitung secara *weighted average* khusus dari total keseluruhan data pada periode yang sedang dipilih.
+    * **Titik Pembagi Y (Median Churn Sub)**: Dihitung dari nilai tengah data wilayah pada periode yang sama.
     
-    ### 2. Logika Perhitungan Akurat
-    * **Churn Rate (%) per Wilayah**: $\frac{\text{Churn Sub}}{\text{EOP}} \times 100$.
-    * **Churn Rate Nasional**: Menggunakan *Weighted Average* akurat dari total keseluruhan churn sub dibagi total keseluruhan EOP.
-    * **Median Churn Sub**: Nilai tengah (*median*) dari total churn sub di seluruh wilayah.
-    
-    ### 3. Klasifikasi 4 Kuadran
-    * **Q1 - High Impact**: Churn Rate > Nasional DAN Churn Sub > Median (Prioritas Utama).
+    ### 2. Klasifikasi 4 Kuadran
+    * **Q1 - High Impact**: Churn Rate > Nasional DAN Churn Sub > Median.
     * **Q2 - High Rate**: Churn Rate > Nasional DAN Churn Sub $\le$ Median.
     * **Q3 - High Volume**: Churn Rate $\le$ Nasional DAN Churn Sub > Median.
     * **Q4 - Low**: Churn Rate $\le$ Nasional DAN Churn Sub $\le$ Median.
@@ -81,7 +77,8 @@ if page == "Technical Documentation":
 # --- HALAMAN UTAMA ---
 st.title("📊 Regional Churn Quadrant Analyzer")
 st.write(
-    "Analisis sebaran kuadran wilayah berdasarkan data terpusat dari GitHub."
+    "Analisis sebaran kuadran wilayah berdasarkan periode terpilih dan tren"
+    " pergerakan historis."
 )
 
 # Link Raw CSV dari GitHub kamu
@@ -97,12 +94,16 @@ try:
   df_all = load_data_from_github(GITHUB_CSV_URL)
   df_all.columns = df_all.columns.str.strip()
 
-  # Cek apakah dataset memiliki kolom 'Period' atau 'Month' untuk multi-periode
-  has_period = "Period" in df_all.columns or "Month" in df_all.columns
-  period_col = "Period" if "Period" in df_all.columns else ("Month" if "Month" in df_all.columns else None)
+  # Deteksi kolom periode (misal: 'Period', 'Month', atau 'Periode')
+  period_col = None
+  for col in ["Period", "Month", "Periode"]:
+    if col in df_all.columns:
+      period_col = col
+      break
 
-  if has_period and period_col:
+  if period_col:
     periods = sorted(df_all[period_col].unique())
+    # Default ke periode terbaru (index terakhir, yaitu Aug 2026)
     selected_period = st.selectbox(
         "Pilih Periode Analisis:", periods, index=len(periods) - 1
     )
@@ -133,14 +134,12 @@ try:
       df_regions["Churn Sub"] / df_regions["EOP"]
   ) * 100
 
-  # Kalkulasi Nasional Akurat (Weighted Average dari Total Keseluruhan)
+  # --- KALKULASI SPESIFIK HANYA UNTUK PERIODE TERPILIH ---
   total_churn_sub = df_regions["Churn Sub"].sum()
   total_eop = df_regions["EOP"].sum()
   national_churn_rate = (
       (total_churn_sub / total_eop) * 100 if total_eop > 0 else 0
   )
-
-  # Hitung Median Churn Sub
   median_churn_sub = df_regions["Churn Sub"].median()
 
 
@@ -160,17 +159,17 @@ try:
 
   df_regions["Kuadran"] = df_regions.apply(assign_quadrant, axis=1)
 
-  # Tampilkan Metrik Pembagi
+  # Tampilkan Metrik Pembagi untuk Periode Aktif
   st.markdown("---")
   col1, col2 = st.columns(2)
   with col1:
     st.metric(
-        label="Titik Pembagi X (Churn Rate Nasional)",
+        label=f"Titik Pembagi X (Churn Rate Nasional - {selected_period})",
         value=f"{national_churn_rate:.2f}%",
     )
   with col2:
     st.metric(
-        label="Titik Pembagi Y (Median Churn Sub)",
+        label=f"Titik Pembagi Y (Median Churn Sub - {selected_period})",
         value=f"{median_churn_sub:,.0f}",
     )
   st.markdown("---")
@@ -291,13 +290,69 @@ try:
   st.plotly_chart(fig, use_container_width=True)
 
   # Tampilkan Tabel Rangkuman Periode Aktif
-  st.subheader("📋 Tabel Rangkuman Hasil Kuadran")
+  st.subheader(f"📋 Tabel Rangkuman Hasil Kuadran ({selected_period})")
   st.dataframe(
       df_regions[
           ["Region", "EOP", "Churn Sub", "Churn Rate (%)", "Kuadran"]
       ].style.format({"Churn Rate (%)": "{:.2f}%", "Churn Sub": "{:,.0f}"}),
       use_container_width=True,
   )
+
+  # --- TABEL TREND HISTORIS LINTAS PERIODE DI BAWAH ---
+  if period_col and len(periods) > 1:
+    st.markdown("---")
+    st.subheader("📈 Tabel Tren Historis Wilayah (Lintas Periode)")
+
+    table_mode = st.radio(
+        "Pilih Jenis Tampilan Tren:",
+        ["Churn Rate (%)", "Posisi Kuadran"],
+        horizontal=True,
+    )
+
+
+    def get_historical_pivot(mode):
+      processed_list = []
+      for p in periods:
+        df_p = df_all[df_all[period_col] == p].copy()
+        # Bersihkan total jika ada
+        df_p = df_p[
+            ~df_p["Region"]
+            .astype(str)
+            .str.contains("Grand Total|Total", case=False, na=False)
+        ]
+        df_p["Churn Sub"] = pd.to_numeric(df_p["Churn Sub"], errors="coerce")
+        df_p["EOP"] = pd.to_numeric(df_p["EOP"], errors="coerce")
+
+        tot_cs = df_p["Churn Sub"].sum()
+        tot_eop = df_p["EOP"].sum()
+        nat_rate = (tot_cs / tot_eop) * 100 if tot_eop > 0 else 0
+        med_cs = df_p["Churn Sub"].median()
+
+        df_p["Churn Rate (%)"] = (df_p["Churn Sub"] / df_p["EOP"]) * 100
+        for _, row in df_p.iterrows():
+          cr = row["Churn Rate (%)"]
+          cs = row["Churn Sub"]
+          if cr > nat_rate and cs > med_cs:
+            quad = "Q1 - High Impact"
+          elif cr > nat_rate and cs <= med_cs:
+            quad = "Q2 - High Rate"
+          elif cr <= nat_rate and cs > med_cs:
+            quad = "Q3 - High Volume"
+          else:
+            quad = "Q4 - Low"
+
+          val = f"{cr:.2f}%" if mode == "Churn Rate (%)" else quad
+          processed_list.append(
+              {"Region": row["Region"], "Period": row[period_col], "Value": val}
+          )
+
+      df_proc = pd.DataFrame(processed_list)
+      df_pivot = df_proc.pivot(index="Region", columns="Period", values="Value")
+      return df_pivot
+
+
+    df_trend = get_historical_pivot(table_mode)
+    st.dataframe(df_trend, use_container_width=True)
 
   # Fitur Download ke Excel
   output = io.BytesIO()
@@ -316,7 +371,4 @@ try:
   )
 
 except Exception as e:
-  st.error(
-      f"Gagal memuat data dari GitHub. Pastikan link Raw URL sudah benar. Error:"
-      f" {e}"
-  )
+  st.error(f"Gagal memuat atau memproses data dari GitHub. Error: {e}")
