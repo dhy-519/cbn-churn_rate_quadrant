@@ -104,7 +104,6 @@ try:
       break
 
   if period_col:
-    # Urutkan periode secara kronologis dengan aman (mendukung berbagai format tanggal)
     try:
       periods = sorted(
           df_all[period_col].unique(),
@@ -113,7 +112,7 @@ try:
     except:
       periods = sorted(df_all[period_col].unique())
 
-    # Default ke periode terbaru (elemen terakhir dalam urutan kronologis)
+    # Default ke periode terbaru (elemen terakhir, misal Aug-26 atau Aug 2026)
     selected_period = st.selectbox(
         "Pilih Periode Analisis:", periods, index=len(periods) - 1
     )
@@ -321,7 +320,8 @@ try:
 
 
     def get_historical_pivot(mode):
-      processed_list = []
+      # Menyimpan data numerik untuk perhitungan selisih jika mode 'Churn Rate (%)'
+      raw_records = []
       for p in periods:
         df_p = df_all[df_all[period_col] == p].copy()
         df_p = df_p[
@@ -350,24 +350,67 @@ try:
           else:
             quad = "Q4 - Low"
 
-          val = f"{cr:.2f}%" if mode == "Churn Rate (%)" else quad
-          processed_list.append(
-              {"Region": row["Region"], "Period": row[period_col], "Value": val}
-          )
+          raw_records.append({
+              "Region": row["Region"],
+              "Period": row[period_col],
+              "Rate": cr,
+              "Quadrant": quad,
+          })
 
-      df_proc = pd.DataFrame(processed_list)
-      df_pivot = df_proc.pivot(index="Region", columns="Period", values="Value")
+      df_proc = pd.DataFrame(raw_records)
+      existing_periods = [p for p in periods if p in df_proc["Period"].values]
 
-      existing_periods = [p for p in periods if p in df_pivot.columns]
-      df_pivot = df_pivot[existing_periods]
-      return df_pivot
+      if mode == "Posisi Kuadran":
+        df_pivot = df_proc.pivot(
+            index="Region", columns="Period", values="Quadrant"
+        )
+        return df_pivot[existing_periods], None
+      else:
+        # Mode Churn Rate (%) dengan perhitungan selisih percentage point
+        df_rate_pivot = df_proc.pivot(
+            index="Region", columns="Period", values="Rate"
+        )
+        df_rate_pivot = df_rate_pivot[existing_periods]
+
+        # Buat dataframe untuk display berisikan string dengan panah perubahan
+        df_display = pd.DataFrame(index=df_rate_pivot.index)
+        cols = df_rate_pivot.columns
+
+        for i, col in enumerate(cols):
+          if i == 0:
+            df_display[col] = df_rate_pivot[col].apply(lambda x: f"{x:.2f}%")
+          else:
+            prev_col = cols[i - 1]
+
+            def calc_diff(row):
+              curr = row[col]
+              prev = row[prev_col]
+              diff = curr - prev
+              if pd.isna(curr) or pd.isna(prev):
+                return f"{curr:.2f}%" if not pd.isna(curr) else "-"
+              if diff > 0:
+                return (
+                    f"{curr:.2f}% (<span style='color:red;'>↑"
+                    f" +{diff:.2f}%</span>)"
+                )
+              elif diff < 0:
+                return (
+                    f"{curr:.2f}% (<span style='color:green;'>↓"
+                    f" {diff:.2f}%</span>)"
+                )
+              else:
+                return f"{curr:.2f}% (0.00%)"
+
+            df_display[col] = df_rate_pivot.apply(calc_diff, axis=1)
+
+        return df_display, df_rate_pivot
 
 
-    df_trend = get_historical_pivot(table_mode)
+    if table_mode == "Posisi Kuadran":
+      df_trend, _ = get_historical_pivot("Posisi Kuadran")
 
 
-    def color_quadrant_cells(val):
-      if table_mode == "Posisi Kuadran":
+      def color_quadrant_cells(val):
         if "Q1" in str(val):
           return "background-color: rgba(255, 77, 77, 0.4); color: white;"
         elif "Q2" in str(val):
@@ -376,15 +419,24 @@ try:
           return "background-color: rgba(255, 219, 77, 0.4); color: black;"
         elif "Q4" in str(val):
           return "background-color: rgba(77, 171, 77, 0.4); color: white;"
-      return ""
+        return ""
 
 
-    if table_mode == "Posisi Kuadran":
       st.dataframe(
           df_trend.style.map(color_quadrant_cells), use_container_width=True
       )
     else:
-      st.dataframe(df_trend, use_container_width=True)
+      df_trend, _ = get_historical_pivot("Churn Rate (%)")
+      # Karena ada tag HTML span untuk warna panah, gunakan st.markdown / unsafe_allow_html atau st.write dengan markdown
+      st.markdown(
+          "*(Catatan: Panah merah $\\uparrow$ menunjukkan kenaikan churn rate"
+          " (memburuk), panah hijau $\\downarrow$ menunjukkan penurunan churn"
+          " rate (membaik).)*"
+      )
+      st.markdown(
+          df_trend.to_html(escape=False, classes="dataframe stDataFrame"),
+          unsafe_allow_html=True,
+      )
 
   # Fitur Download ke Excel
   output = io.BytesIO()
@@ -403,4 +455,4 @@ try:
   )
 
 except Exception as e:
-  st.error(f"Gagal memuat atau memproses data dari GitHub. Error: {e}")
+  st.error(f"Gagal memproses data dari GitHub. Error: {e}")
